@@ -16,6 +16,7 @@ const io = new Server(server, {
 });
 
 let waitingUser = null;
+const partnerBySocketId = new Map();
 
 io.on('connection', (socket) => {
   console.log(`🔌 New connection: ${socket.id}`);
@@ -26,6 +27,10 @@ io.on('connection', (socket) => {
 
     if (waitingUser && waitingUser.id !== socket.id) {
       console.log(`🤝 Paired ${waitingUser.id} with ${socket.id}`);
+
+      // Track pairing in both directions
+      partnerBySocketId.set(waitingUser.id, socket.id);
+      partnerBySocketId.set(socket.id, waitingUser.id);
 
       // First user is initiator
       waitingUser.emit('partner-found', { partnerId: socket.id, initiator: true });
@@ -57,14 +62,31 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`❌ Disconnected: ${socket.id}`);
 
+    // If this socket was waiting, clear it
     if (waitingUser && waitingUser.id === socket.id) {
       waitingUser = null;
     }
 
-    socket.broadcast.emit('partner-disconnected');
+    // Notify only the paired partner, if any
+    const partnerId = partnerBySocketId.get(socket.id);
+    if (partnerId) {
+      partnerBySocketId.delete(socket.id);
+      partnerBySocketId.delete(partnerId);
+      io.to(partnerId).emit('partner-disconnected');
+    }
   });
 });
 
-server.listen(5000, () => {
-  console.log('✅ Server running on http://localhost:5000');
+const PORT = process.env.PORT || 5000;
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Stop the other process or run with a different PORT.`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
