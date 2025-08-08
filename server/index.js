@@ -77,6 +77,16 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(5000, () => {
-  console.log('✅ Server running on http://localhost:5000');
+const PORT = process.env.PORT || 5000;
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Stop the other process or run with a different PORT.`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
+});
+
+server.listen(PORT, () => {
+  console.log(`✅ Server running on http://localhost:${PORT}`);
 });
